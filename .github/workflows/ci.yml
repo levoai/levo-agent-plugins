@@ -59,7 +59,8 @@ jobs:
 
       - name: Scan for denied content
         run: |
-          echo "Scanning for denied content patterns..."
+          echo "Scanning skill content for denied patterns..."
+          echo "(Meta-docs describing the deny list are excluded from this scan)"
           
           # Define deny-list patterns
           DENY_PATTERNS=(
@@ -81,33 +82,40 @@ jobs:
             "xoxp-[0-9]+"
           )
           
+          # Scan targets: skill content and marketplace manifests only
+          # Excludes: .github/, docs/, CONTRIBUTING.md, and other meta-docs
+          SCAN_PATHS=(
+            "./skills"
+            "./.claude-plugin/marketplace.json"
+            "./.agents/plugins/marketplace.json"
+          )
+          
           FOUND_VIOLATIONS=0
           
           for pattern in "${DENY_PATTERNS[@]}"; do
             echo "Checking pattern: $pattern"
             
-            # Search in all text files, excluding .git and node_modules
-            if grep -r -E "$pattern" \
-                --include="*.md" \
-                --include="*.json" \
-                --include="*.yml" \
-                --include="*.yaml" \
-                --exclude-dir=".git" \
-                --exclude-dir="node_modules" \
-                . 2>/dev/null; then
-              echo "❌ Found denied pattern: $pattern"
-              FOUND_VIOLATIONS=1
-            fi
+            for scan_path in "${SCAN_PATHS[@]}"; do
+              if [ -e "$scan_path" ]; then
+                if grep -r -E "$pattern" \
+                    --include="*.md" \
+                    --include="*.json" \
+                    "$scan_path" 2>/dev/null; then
+                  echo "❌ Found denied pattern '$pattern' in: $scan_path"
+                  FOUND_VIOLATIONS=1
+                fi
+              fi
+            done
           done
           
           if [ $FOUND_VIOLATIONS -eq 1 ]; then
             echo ""
-            echo "❌ Denied content patterns found!"
+            echo "❌ Denied content patterns found in skill content!"
             echo "Please remove references to internal services, credentials, or identifiers."
             exit 1
           fi
           
-          echo "✅ No denied content patterns found!"
+          echo "✅ No denied content patterns found in skill content!"
 
       - name: Validate marketplace.json structure
         run: |

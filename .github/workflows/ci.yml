@@ -1,0 +1,221 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate JSON files
+        run: |
+          echo "Validating JSON files..."
+          
+          # Find and validate all JSON files
+          find . -name "*.json" -type f | while read -r file; do
+            echo "Validating: $file"
+            if ! python3 -m json.tool "$file" > /dev/null 2>&1; then
+              echo "❌ Invalid JSON: $file"
+              exit 1
+            fi
+            echo "✅ Valid: $file"
+          done
+          
+          echo "All JSON files are valid!"
+
+      - name: Check skill frontmatter
+        run: |
+          echo "Checking skill files for required frontmatter..."
+          
+          # Find all SKILL.md files
+          find ./skills -name "SKILL.md" -type f | while read -r file; do
+            echo "Checking: $file"
+            
+            # Check for visibility: product-public
+            if ! grep -q "visibility: product-public" "$file"; then
+              echo "❌ Missing 'visibility: product-public' frontmatter: $file"
+              exit 1
+            fi
+            
+            echo "✅ Valid frontmatter: $file"
+          done
+          
+          echo "All skill files have valid frontmatter!"
+
+      - name: Scan for denied content
+        run: |
+          echo "Scanning for denied content patterns..."
+          
+          # Define deny-list patterns
+          DENY_PATTERNS=(
+            "platform-services"
+            "ClickUp"
+            "CU-[0-9]+"
+            "Istio"
+            "Tenant Admin"
+            "Descope Access Key"
+            "descope.*key"
+            "DESCOPE_"
+            "internal\.levo\."
+            "staging\.levo\."
+            "\.levocloud\.io"
+            "api-key.*=.*['\"][a-zA-Z0-9]"
+            "Bearer [a-zA-Z0-9_-]{20,}"
+            "sk-[a-zA-Z0-9]{20,}"
+            "xoxb-[0-9]+"
+            "xoxp-[0-9]+"
+          )
+          
+          FOUND_VIOLATIONS=0
+          
+          for pattern in "${DENY_PATTERNS[@]}"; do
+            echo "Checking pattern: $pattern"
+            
+            # Search in all text files, excluding .git and node_modules
+            if grep -r -E "$pattern" \
+                --include="*.md" \
+                --include="*.json" \
+                --include="*.yml" \
+                --include="*.yaml" \
+                --exclude-dir=".git" \
+                --exclude-dir="node_modules" \
+                . 2>/dev/null; then
+              echo "❌ Found denied pattern: $pattern"
+              FOUND_VIOLATIONS=1
+            fi
+          done
+          
+          if [ $FOUND_VIOLATIONS -eq 1 ]; then
+            echo ""
+            echo "❌ Denied content patterns found!"
+            echo "Please remove references to internal services, credentials, or identifiers."
+            exit 1
+          fi
+          
+          echo "✅ No denied content patterns found!"
+
+      - name: Validate marketplace.json structure
+        run: |
+          echo "Validating marketplace.json files..."
+          
+          # Check .claude-plugin/marketplace.json
+          if [ -f ".claude-plugin/marketplace.json" ]; then
+            echo "Checking .claude-plugin/marketplace.json..."
+            
+            # Verify required fields exist
+            python3 << 'EOF'
+          import json
+          import sys
+
+          with open('.claude-plugin/marketplace.json', 'r') as f:
+              data = json.load(f)
+
+          required_fields = ['name', 'version', 'description']
+          missing = [field for field in required_fields if field not in data]
+
+          if missing:
+              print(f"❌ Missing required fields in .claude-plugin/marketplace.json: {missing}")
+              sys.exit(1)
+
+          print("✅ .claude-plugin/marketplace.json is valid")
+          EOF
+          fi
+          
+          # Check .agents/plugins/marketplace.json
+          if [ -f ".agents/plugins/marketplace.json" ]; then
+            echo "Checking .agents/plugins/marketplace.json..."
+            
+            python3 << 'EOF'
+          import json
+          import sys
+
+          with open('.agents/plugins/marketplace.json', 'r') as f:
+              data = json.load(f)
+
+          required_fields = ['name', 'version', 'description']
+          missing = [field for field in required_fields if field not in data]
+
+          if missing:
+              print(f"❌ Missing required fields in .agents/plugins/marketplace.json: {missing}")
+              sys.exit(1)
+
+          print("✅ .agents/plugins/marketplace.json is valid")
+          EOF
+          fi
+
+      - name: Check for secrets in files
+        run: |
+          echo "Scanning for potential secrets..."
+          
+          # Common secret patterns
+          SECRET_PATTERNS=(
+            "password.*=.*['\"]"
+            "secret.*=.*['\"]"
+            "api.?key.*=.*['\"]"
+            "access.?token.*=.*['\"]"
+            "private.?key"
+            "-----BEGIN.*PRIVATE KEY-----"
+            "-----BEGIN.*RSA.*-----"
+          )
+          
+          FOUND_SECRETS=0
+          
+          for pattern in "${SECRET_PATTERNS[@]}"; do
+            if grep -r -i -E "$pattern" \
+                --include="*.md" \
+                --include="*.json" \
+                --include="*.yml" \
+                --include="*.yaml" \
+                --exclude-dir=".git" \
+                --exclude-dir="node_modules" \
+                . 2>/dev/null | grep -v "example" | grep -v "placeholder" | grep -v "your-"; then
+              echo "⚠️  Potential secret pattern found: $pattern"
+              FOUND_SECRETS=1
+            fi
+          done
+          
+          if [ $FOUND_SECRETS -eq 1 ]; then
+            echo ""
+            echo "⚠️  Potential secrets detected. Please review the above matches."
+            echo "If these are false positives (examples, placeholders), this check will pass."
+          fi
+          
+          echo "✅ Secret scan complete"
+
+  lint-markdown:
+    name: Lint Markdown
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install markdownlint
+        run: npm install -g markdownlint-cli
+
+      - name: Lint Markdown files
+        run: |
+          markdownlint '**/*.md' \
+            --ignore node_modules \
+            --ignore .git \
+            --disable MD013 MD033 MD041 \
+            || echo "Markdown lint warnings found (non-blocking)"

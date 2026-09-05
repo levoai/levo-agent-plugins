@@ -1,0 +1,45 @@
+{
+  "name": "levo-agent-plugins",
+  "version": "1.0.0",
+  "description": "Levo.ai API security and observability plugins for AI agents",
+  "author": "Levo, Inc.",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/levoai/levo-agent-plugins",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/levoai/levo-agent-plugins.git"
+  },
+  "keywords": [
+    "levo",
+    "api-security",
+    "observability",
+    "mcp",
+    "ai-agent",
+    "claude",
+    "cursor"
+  ],
+  "skills": [
+    {
+      "id": "levo-mcp",
+      "name": "Levo MCP",
+      "description": "Query Levo API catalog using MCP tools",
+      "path": "skills/levo-mcp/SKILL.md",
+      "visibility": "product-public"
+    },
+    {
+      "id": "levo-getting-started",
+      "name": "Levo Getting Started",
+      "description": "Install and connect to Levo MCP server",
+      "path": "skills/levo-getting-started/SKILL.md",
+      "visibility": "product-public"
+    }
+  ],
+  "mcp": {
+    "server": "levo",
+    "tools": [
+      "levo_list_applications",
+      "levo_get_application_details_by_name",
+      "levo_list_application_endpoints"
+    ]
+  }
+}

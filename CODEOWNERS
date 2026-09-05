@@ -1,0 +1,23 @@
+# CODEOWNERS for levo-agent-plugins
+# These owners will be requested for review on PRs
+
+# Default owners for everything
+* @levoai/platform-team
+
+# Skills require platform team review
+/skills/ @levoai/platform-team
+
+# Marketplace configurations require additional review
+/.claude-plugin/ @levoai/platform-team @levoai/security
+/.agents/ @levoai/platform-team @levoai/security
+
+# CI/CD changes require security review
+/.github/workflows/ @levoai/platform-team @levoai/security
+
+# Security-sensitive files
+/SECURITY.md @levoai/security
+/CODEOWNERS @levoai/platform-team @levoai/security
+
+# Documentation
+/docs/ @levoai/platform-team
+/README.md @levoai/platform-team
